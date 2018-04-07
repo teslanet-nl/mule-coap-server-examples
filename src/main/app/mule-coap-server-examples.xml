@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:mulexml="http://www.mulesoft.org/schema/mule/xml"
+	xmlns:coap-server="http://www.mulesoft.org/schema/mule/coap-server"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation=
+"http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.1.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/3.9/mule.xsd
+http://www.mulesoft.org/schema/mule/coap-server http://www.teslanet.nl/schema/mule/coap-server/1.0/mule-coap-server.xsd
+http://www.mulesoft.org/schema/mule/xml http://www.mulesoft.org/schema/mule/xml/3.9/mule-xml.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/3.9/mule-scripting.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/3.9/mule-validation.xsd">
+	<!--
+	/*******************************************************************************
+	* Copyright (c) 2017, 2018 (teslanet.nl) Rogier Cobben.
+	* 
+	* All rights reserved. This program and the accompanying materials
+	* are made available under the terms of the Eclipse Public License v1.0
+	* and Eclipse Public License - v 2.0 which accompany this distribution.
+	* 
+	* The Eclipse Public License is available at
+	*    http://www.eclipse.org/legal/epl-v20.html
+	* 
+	* Contributors:
+	*    (teslanet.nl) Rogier Cobben - initial creation
+	******************************************************************************/
+	-->
+
+	<coap-server:config name="CoAP_Server_Configuration" secure="${is_secure}"
+		keyStoreLocation="keyStore.jks" keyStorePassword="endPass" privateKeyAlias="server"
+		trustStoreLocation="trustStore.jks" trustStorePassword="rootPass"
+		trustedRootCertificateAlias="root" doc:name="CoAP Server: Server Configuration">
+		<coap-server:resources>
+			<coap-server:resource name="hello" get="true" type="application/xml">
+				<coap-server:resources>
+					<coap-server:resource name="world" get="true" type="application/xml"/>
+				</coap-server:resources>
+			</coap-server:resource>
+			<coap-server:resource name="changeme" get="true" put="true" observe="true"/>
+			<coap-server:resource name="deleteme" get="true" delete="true"/>
+			<coap-server:resource name="slow" get="true" earlyAck="true" type="text/plain"/>
+			<coap-server:resource name="large" get="true" earlyAck="true" size="2345345" type="application/xml"/>
+			<coap-server:resource name="alphabet" get="true" post="true" observe="true">
+				<coap-server:resources>
+					<coap-server:resource name="a" get="true" put="true" delete="true"/>
+					<coap-server:resource name="b" get="true" put="true" delete="true"/>
+					<coap-server:resource name="c" get="true" put="true" delete="true"/>
+				</coap-server:resources>
+			</coap-server:resource>
+		</coap-server:resources>
+	</coap-server:config>
+    <spring:beans>
+    	<spring:bean id="alphabetMap" name="alphabetMap" class="java.util.concurrent.ConcurrentSkipListMap" scope="singleton"/>
+    	<spring:bean id="changemeMap" name="changemeMap" class="java.util.concurrent.ConcurrentSkipListMap" scope="singleton"/>
+	</spring:beans>
+
+	<flow name="listen-root">
+		<coap-server:listen config-ref="CoAP_Server_Configuration" uri="/*" doc:name="listen root resource"/>
+
+		<logger level="INFO" doc:name="Logger"/>
+		<logger message="#['Datatype= ' +  message.dataType]" level="INFO" doc:name="Datatype"/>
+		<logger message="#['Payload= ' + payload]" level="INFO" doc:name="Payload"/>
+		<set-payload value="&lt;response&gt;Hello who?&lt;/response&gt;"
+			doc:name="Set Response Payload" encoding="UTF-8" mimeType="application/xml"/>
+
+	</flow>
+
+	<flow name="listen-hello-world">
+		<coap-server:listen config-ref="CoAP_Server_Configuration" uri="/hello/world"
+			doc:name="listen hello world"/>
+		<logger level="INFO" doc:name="Logger"/>
+		<logger message="#['Datatype= ' +  message.dataType]" level="INFO" doc:name="Datatype"/>
+		<logger message="#['Payload= ' + payload]" level="INFO" doc:name="Payload"/>
+		<set-payload value="&lt;response&gt;Hi!&lt;/response&gt;" doc:name="Set Response Payload"
+			encoding="UTF-8" mimeType="application/xml"/>
+	</flow>
+
+	<flow name="listen-changeme">
+		<coap-server:listen config-ref="CoAP_Server_Configuration" uri="/changeme"
+			doc:name="listen changeme"/>
+		<set-variable variableName="method"
+			value="#[ message.inboundProperties['coap.request.code']]" doc:name="set method"/>
+		<set-variable variableName="uri" value="#[message.inboundProperties['coap.request.uri'] ]"
+			doc:name="set uri"/>
+		<logger level="INFO" doc:name="Logger"/>
+
+		<choice doc:name="Choice">
+			<when expression="#[ flowVars.method == 'PUT']">
+				<logger message="PUT on changeme" level="INFO" doc:name="Logger"/>
+				<invoke name="update-changeme" object-ref="changemeMap" method="put" methodArguments="#['content'], #[payload]" doc:name="put content"/>
+				
+				
+				<coap-server:resource-changed config-ref="CoAP_Server_Configuration" uri="/changeme"
+					doc:name="resource changed"/>
+				<invoke name="reget-changeme" object-ref="changemeMap" method="get" methodArguments="#['content']" doc:name="put content"/>
+				
+			</when>
+
+			<otherwise>
+				<logger message="GET on changeme" level="INFO" doc:name="Logger"/>
+				<invoke name="get-changeme" object-ref="changemeMap" method="get" methodArguments="#['content']" doc:name="put content"/>
+				
+				<set-property propertyName="coap.opt.max_age" value="120" doc:name="set max age"/>
+				<set-property propertyName="coap.opt.etag.list"
+					value="#[nl.teslanet.mule.transport.coap.commons.options.ETag.createFromHex('FF00FF')]"
+					doc:name="set etag"/>
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="listen-deleteme">
+		<coap-server:listen config-ref="CoAP_Server_Configuration" uri="/deleteme"
+			doc:name="listen changeme"/>
+		<set-variable variableName="method"
+			value="#[ message.inboundProperties['coap.request.code']]" doc:name="set method"/>
+		<set-variable variableName="uri" value="#[message.inboundProperties['coap.request.uri'] ]"
+			doc:name="set uri"/>
+		<logger level="INFO" doc:name="Logger"/>
+
+		<choice doc:name="Choice">
+			<when expression="#[ flowVars.method == 'DELETE']">
+				<logger message="DELETE on deleteme" level="INFO" doc:name="Logger"/>
+				<set-payload value="#[ null ]" doc:name="Set Payload" encoding="UTF-8"
+					mimeType="application/xml"/>
+				<coap-server:remove-resource config-ref="CoAP_Server_Configuration" uri="#[flowVars.uri]"
+					doc:name="resource remove"/>
+			</when>
+
+			<otherwise>
+				<logger message="GET on deleteme" level="INFO" doc:name="Logger"/>
+				<set-payload
+					value="&lt;response&gt;This is the content of the resource deleteme.&lt;/response&gt;"
+					doc:name="Set Payload" encoding="UTF-8" mimeType="application/xml"/>
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="listen-slow">
+		<coap-server:listen config-ref="CoAP_Server_Configuration" uri="/slow"
+			doc:name="listen slow"/>
+		<logger level="INFO" doc:name="Logger"/>
+		<scripting:component doc:name="wait a moment">
+			<scripting:script engine="Groovy"><![CDATA[Thread.sleep(5000)]]></scripting:script>
+		</scripting:component>
+		<set-payload value="at last there is a response" doc:name="Set Response Payload"
+			encoding="UTF-8" mimeType="text/plain"/>
+	</flow>
+	<flow name="listen-large">
+		<coap-server:listen config-ref="CoAP_Server_Configuration" uri="/large"
+			doc:name="listen slow"/>
+		<logger level="INFO" doc:name="Logger"/>
+
+		<parse-template location="/home/rogier/data/mtm2file/archief/vcmn"
+			doc:name="Set Response Payload" encoding="UTF-8" mimeType="application/xml"/>
+	</flow>
+
+
+	<flow name="listen-alphabet-children">
+		<coap-server:listen uri="/alphabet/*" config-ref="CoAP_Server_Configuration" doc:name="listen alphabet children"/>
+		<set-variable variableName="method"
+			value="#[message.inboundProperties['coap.request.code']]" doc:name="Variable"/>
+		<set-variable variableName="uri" value="#[message.inboundProperties['coap.request.uri']]" doc:name="Variable"/>
+		<byte-array-to-string-transformer doc:name="Byte Array to String"/>
+		<logger level="INFO" message="#[payload]" doc:name="Logger"/>
+
+		<choice doc:name="Choice">
+			<when expression="#[ flowVars.method == 'PUT']">
+				<logger message="PUT" level="INFO" doc:name="Logger"/>
+                <validation:matches-regex message="#[payload + ' is not a letter']" exceptionClass="nl.teslanet.mule.transport.coap.server.examples.NotALetterException" value="#[payload]" regex="^[a-zA-Z]$" caseSensitive="true" doc:name="Validation"/>
+                <invoke name="update-letter" object-ref="alphabetMap" method="put" methodArguments="#[flowVars.uri], #[payload]" doc:name="put letter"/>
+				
+				<coap-server:resource-changed config-ref="CoAP_Server_Configuration"
+					uri="/alphabet" doc:name="alphabet changed"/>
+				<message-properties-transformer overwrite="true" doc:name="response code: CHANGED">
+					<add-message-property key="coap.response.code" value="CHANGED"/>
+				</message-properties-transformer>
+			</when>
+			<when expression="#[ flowVars.method == 'DELETE']">
+				<logger message="DELETE" level="INFO" doc:name="Logger"/>
+                <invoke name="remove-letter" object-ref="alphabetMap" method="remove" methodArguments="#[flowVars.uri]" doc:name="remove letter"/>
+				<coap-server:remove-resource
+					config-ref="CoAP_Server_Configuration"
+					uri="#[flowVars.uri]" doc:name="delete resource"/>
+				<coap-server:resource-changed config-ref="CoAP_Server_Configuration"
+					uri="/alphabet" doc:name="alphabet changed"/>
+				<message-properties-transformer overwrite="true" doc:name="coap properties">
+					<add-message-property key="coap.opt.location_path" value="#[flowVars.uri]"/>						
+					<add-message-property key="coap.response.code" value="DELETED"/>
+				</message-properties-transformer>
+			</when>
+			<otherwise>
+                <invoke name="get-letter" object-ref="alphabetMap" method="get" methodArguments="#[flowVars.uri]" doc:name="get letter"/>
+
+				<logger message="GET" level="INFO" doc:name="Logger"/>
+				<set-property propertyName="coap.response.code" value="CONTENT" doc:name="Property"/>
+			</otherwise>
+		</choice>
+        <choice-exception-strategy doc:name="Choice Exception Strategy">
+            <catch-exception-strategy when="#[exception.causedBy(nl.teslanet.mule.transport.coap.server.examples.NotALetterException)]" doc:name="Catch when not a letter">
+                <set-payload value="#[exception.getMessage()]" doc:name="Set Payload"/>
+            	<message-properties-transformer overwrite="true" doc:name="set changed">
+					<add-message-property key="coap.response.code" value="BAD_REQUEST"/>
+				</message-properties-transformer>
+			</catch-exception-strategy>
+        </choice-exception-strategy>
+
+	</flow>
+
+	<flow name="listen-alphabet">
+		<coap-server:listen config-ref="CoAP_Server_Configuration" uri="/alphabet"
+			doc:name="listen alphabet"/>
+		<set-variable variableName="method"
+			value="#[ message.inboundProperties['coap.request.code']]" doc:name="set method"/>
+		<set-variable variableName="uri" value="#[message.inboundProperties['coap.request.uri'] ]"
+			doc:name="set uri"/>
+        <byte-array-to-string-transformer doc:name="Byte Array to String"/>
+		<logger level="INFO" doc:name="Logger"/>
+
+		<choice doc:name="Choice">
+			<when expression="#[ flowVars.method == 'POST']">
+			    <validation:matches-regex message="#[payload + ' is not a letter']" exceptionClass="nl.teslanet.mule.transport.coap.server.examples.NotALetterException" value="#[payload]" regex="^[a-zA-Z]$" caseSensitive="true" doc:name="Validation"/>
+                <set-variable variableName="letter_uri" value="#['/alphabet/' + payload]" doc:name="Variable"/>
+			
+                <invoke name="add-letter" object-ref="alphabetMap" method="put" methodArguments="#[ flowVars.'letter_uri'], #[payload]" doc:name="put letter"/>
+                <coap-server:add-resource config-ref="CoAP_Server_Configuration" type="0" uri="#[flowVars.letter_uri]" delete="true" get="true" put="true" doc:name="add letter resource"/>
+                
+				<coap-server:resource-changed config-ref="CoAP_Server_Configuration"
+					uri="/alphabet" doc:name="changed"/>
+				<message-properties-transformer overwrite="true" doc:name="set changed">
+					<add-message-property key="coap.response.code" value="CHANGED"/>
+					<add-message-property key="coap.opt.location_path" value="#[flowVars.letter_uri]"/>
+				</message-properties-transformer>
+			</when>
+			<otherwise>
+                <invoke name="get-all-letters" object-ref="alphabetMap" method="values" doc:name="get values"/>
+			</otherwise>
+		</choice>
+		<logger message="#['Response Payload: ' + payload]" level="INFO" doc:name="Logger"/>
+		<!-- <set-property propertyName="coap.response.code" value="CONTENT" doc:name="Property"/>-->
+		        <choice-exception-strategy doc:name="Choice Exception Strategy">
+            <catch-exception-strategy when="#[exception.causedBy(nl.teslanet.mule.transport.coap.server.examples.NotALetterException)]" doc:name="Catch when not a letter">
+                <set-payload value="#[exception.getMessage()]" doc:name="Set Payload"/>
+            	<message-properties-transformer overwrite="true" doc:name="set changed">
+					<add-message-property key="coap.response.code" value="BAD_REQUEST"/>
+				</message-properties-transformer>
+			</catch-exception-strategy>
+        </choice-exception-strategy>
+	</flow>
+
+</mule>
