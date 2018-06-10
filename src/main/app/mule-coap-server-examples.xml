@@ -34,16 +34,16 @@ http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mu
 		trustStoreLocation="trustStore.jks" trustStorePassword="rootPass"
 		trustedRootCertificateAlias="root" doc:name="CoAP Server: Server Configuration">
 		<coap-server:resources>
-			<coap-server:resource name="hello" get="true" type="application/xml">
+			<coap-server:resource name="hello" get="true" ct="41">
 				<coap-server:resources>
-					<coap-server:resource name="world" get="true" type="application/xml"/>
+					<coap-server:resource name="world" get="true" ct="41"/>
 				</coap-server:resources>
 			</coap-server:resource>
-			<coap-server:resource name="changeme" get="true" put="true" observe="true"/>
+			<coap-server:resource name="changeme" get="true" put="true" observable="true"/>
 			<coap-server:resource name="deleteme" get="true" delete="true"/>
-			<coap-server:resource name="slow" get="true" earlyAck="true" type="text/plain"/>
-			<coap-server:resource name="large" get="true" earlyAck="true" size="2345345" type="application/xml"/>
-			<coap-server:resource name="alphabet" get="true" post="true" observe="true">
+			<coap-server:resource name="slow" get="true" earlyAck="true" ct="0"/>
+			<coap-server:resource name="large" get="true" earlyAck="true" sz="2345345" ct="41"/>
+			<coap-server:resource name="alphabet" get="true" post="true" observable="true">
 				<coap-server:resources>
 					<coap-server:resource name="a" get="true" put="true" delete="true"/>
 					<coap-server:resource name="b" get="true" put="true" delete="true"/>
@@ -225,7 +225,7 @@ http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mu
                 <set-variable variableName="letter_uri" value="#['/alphabet/' + payload]" doc:name="Variable"/>
 			
                 <invoke name="add-letter" object-ref="alphabetMap" method="put" methodArguments="#[ flowVars.'letter_uri'], #[payload]" doc:name="put letter"/>
-                <coap-server:add-resource config-ref="CoAP_Server_Configuration" type="0" uri="#[flowVars.letter_uri]" delete="true" get="true" put="true" doc:name="add letter resource"/>
+                <coap-server:add-resource config-ref="CoAP_Server_Configuration" ct="0" uri="#[flowVars.letter_uri]" delete="true" get="true" put="true" doc:name="add letter resource"/>
                 
 				<coap-server:resource-changed config-ref="CoAP_Server_Configuration"
 					uri="/alphabet" doc:name="changed"/>
