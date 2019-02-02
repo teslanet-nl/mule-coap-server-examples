@@ -3,4 +3,5 @@
     <name>mule-coap-server-examples</name>
     <description></description>
     <muleExtension name="CoAP Server" qualifier="org.mule.tooling.ui.contribution.coap-server.3.5.0"/>
+    <muleExtension name="CoAP Server" qualifier="org.mule.tooling.ui.contribution.coap-server.3.8.0"/>
 </mule-project>
